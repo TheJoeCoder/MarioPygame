@@ -1,0 +1,4 @@
+sudo apt install imagemagick
+tar cJvf backup.tar.xz .
+mogrify $(find ./sprites/ -name '*.png')
+mogrify $(find ./tiles/ -name '*.png')
