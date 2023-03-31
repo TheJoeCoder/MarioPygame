@@ -119,11 +119,26 @@ class Mario():
     def physics(self, collidabletiles: list, canfall: bool) -> None:
         # Called once per tick
         # Computes physics
-        # Get bounding box for current animation
+        # Get bounding box for current physics cycle
         self.bounding_rectangle = sprites[self.getAnim()].get_rect()
+        self.bounding_rectangle.left, self.bounding_rectangle.top = camera.world_to_camera(self.x, self.y)
         # Tone movement speed down a bit (proper slowdown)
         self.x_velocity = self.x_velocity * 0.9
         self.y_velocity = self.y_velocity * 0.9
+        # Physics
+        if canfall == True:
+            if self.y_velocity >= 0:
+                if self.inAir:
+                    self.y_velocity += 0.8
+        colliding = False
+        for tilegroup in collidabletiles:
+            for tile in tilegroup.sprites():
+                if self.bounding_rectangle.colliderect(tile.rect):
+                    colliding = True
+                    print("colliding with sprite")
+        if colliding:
+            self.x_velocity = -self.x_velocity
+            self.y_velocity = -self.y_velocity
         # Movement speed clamp
         # X
         if self.x_velocity > max_x_velocity:
@@ -145,24 +160,32 @@ class Mario():
         elif self.y_velocity < 0.001 and self.y_velocity > -0.001:
             # Between down 0.001 and up 0.001, set to 0
             self.y_velocity = 0
-        # Physics
-        if canfall == True:
-            if self.y_velocity >= 0:
-                if self.inAir:
-                    self.y_velocity += 0.8
-        colliding = False
-        for tilegroup in collidabletiles:
-            for tile in tilegroup.sprites():
-                if self.bounding_rectangle.colliderect(tile.rect):
-                    colliding = True
-                    print("colliding with sprite")
-        if colliding:
-            print("COLLIDING")
+        # Check control type and void previous logic (there's probably a better place to put this)
+        if (controltype == ControlType.CAMERA_SPRITE_MOVE):
+            # ignore all physics if the camera mode is CAMERA_SPRITE_MOVE
+            self.x_velocity = 0
+            self.y_velocity = 0
+            self.x, self.y = camera.camera_to_world(x_percent(50), y_percent(50))
+            self.updateState()
+            return
         # Adds velocity to X+Y
         self.x += self.x_velocity
         self.y += self.y_velocity
         # Update state
         self.updateState()
+    def debug(self) -> None:
+        font_size = 15
+        font = pygame.font.SysFont(None, font_size)
+        arr = []
+        arr.append("W " + str(self.x) + " " + str(self.y))
+        arr.append("C " + str(camera.world_to_camera(self.x, self.y)))
+        arr.append("V " + str(self.x_velocity) + " " + str(self.y_velocity))
+        counter = 0
+        for text in arr:
+            img = font.render(text, True, (255, 255, 255))
+            canvas.blit(img, (0, counter))
+            counter += font_size
+        
 
 
 class Background(pygame.sprite.Sprite):
@@ -183,8 +206,9 @@ class Tile(pygame.sprite.Sprite):
         self.worldx, self.worldy = location
     def update(self):
         self.rect.left, self.rect.top = camera.world_to_camera(self.worldx, self.worldy)
-    def draw(self) -> None:
-        canvas.blit(self.image, dest=camera.world_to_camera(self.rect.left, self.rect.top))
+    def draw(self):
+        # canvas.blit(self.image, dest=camera.world_to_camera(self.worldx, self.worldy))
+        canvas.blit(self.image, dest=(self.rect.left, self.rect.top))
 
 
 class Camera():
@@ -200,7 +224,7 @@ class Camera():
         if checkpos[0] >= x_percent(70) or checkpos[0] <= x_percent(20):
             # Move screen left or right (mario's direction)
             self.move((1 * mario.x_velocity, 0))
-        if checkpos[1] >= y_percent(70) or checkpos[1] <= y_percent(20):
+        if checkpos[1] >= y_percent(55) or checkpos[1] <= y_percent(45):
             # Move screen up or down (mario's direction)
             self.move((0, 1 * mario.y_velocity))
     def world_to_camera(self, x, y) -> int:
@@ -224,8 +248,8 @@ goDown = False
 
 # TODO REPLACE THIS CODE
 worldtilegroup = pygame.sprite.RenderPlain()
-for i in range(304, 496, 16):
-    worldtilegroup.add(Tile("tiles/world/luckyblock.png", (128, i), (60, 188, 252)))
+for i in range(0, 256, 16):
+    worldtilegroup.add(Tile("tiles/world/luckyblock.png", (i, 480), (60, 188, 252)))
 # TODO END REPLACE THIS CODE
 
 
@@ -261,7 +285,7 @@ while not exit:
             if mario.x_velocity > 0:
                 mario.x_velocity = 0
             mario.x_velocity -= 1
-    if controltype == ControlType.CAMERA:
+    if controltype == ControlType.CAMERA or controltype == ControlType.CAMERA_SPRITE_MOVE:
         if goRight:
             camera.move((10, 0))
         if goLeft:
@@ -274,10 +298,12 @@ while not exit:
     bg.draw()
     # PLACEHOLDER DRAW CODE: TODO REPLACE 
     worldtilegroup.update()
-    worldtilegroup.draw(canvas)
+    for worldtile in worldtilegroup.sprites():
+        worldtile.draw()
     # END PLACEHOLDER DRAW CODE
     mario.physics([worldtilegroup], True)
     mario.draw()
+    mario.debug() # DEBUG - REMOVE LATER
     if keepMarioInFrame:
         camera.mariocheck()
     pygame.display.update()

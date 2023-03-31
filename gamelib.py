@@ -13,3 +13,4 @@ class MarioDirection(Enum):
 class ControlType(Enum):
     CONTROL = 0
     CAMERA = 1
+    CAMERA_SPRITE_MOVE = 2
